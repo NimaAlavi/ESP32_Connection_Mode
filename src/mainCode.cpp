@@ -7,31 +7,31 @@
     #include <ESPAsyncTCP.h>
 #endif
 #include <ESPAsyncWebServer.h>
+// #include <WebServer.h>
 #include "AP_Connection.h"
 #include <EEPROM.h>
 
-#define EEPROM_SIZE 30
+#define EEPROM_SIZE 50
 
 AsyncWebServer AP_Server(80);
 AsyncWebServer STA_Server(80);
+
 const char* boardSSID     = "DannTech";
 const char* boardPassword = "Nima7281";
 
 // Variable to store the HTTP request
 const char*  wifiSSID     = "wifiName";
 const char*  wifiPassword = "wifiPass";
-// Set your Static IP address
-IPAddress local_IP(192, 168, 1, 184);
-// Set your Gateway IP address
-IPAddress gateway(192, 168, 1, 1);
 
+IPAddress local_IP(192, 168, 1, 184);
+IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
 
 String wifiName, wifiPass;
 
-const char index_html[] PROGMEM = R"rawliteral(
+const char AP_html[] PROGMEM = R"rawliteral(
             <!DOCTYPE html>
             <html>
                 <head><meta name="viewport" content="width=device-width, initial-scale=1\">
@@ -49,6 +49,86 @@ const char index_html[] PROGMEM = R"rawliteral(
                 </body>
             </html>
         )rawliteral";
+
+const char STA_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            html {
+                font-family: Helvetica;
+                display: inline-block;
+                margin: 0px auto;
+                text-align: center;
+            }
+            
+            h1 {
+                margin-top: 50px;
+            }
+            
+            .button1 {
+                background-color: #0a960d;
+                border: none;
+                color: white;
+                padding: 16px 40px;
+                text-decoration: none;
+                font-size: 30px;
+                margin: 2px;
+                cursor: pointer;
+                border-radius: 68px;
+            }
+            
+            .button1:hover {
+                background-color: darkblue;
+            }
+            
+            .button2 {
+                background-color: #a50d0d;
+                border: none;
+                color: white;
+                padding: 16px 40px;
+                text-decoration: none;
+                font-size: 30px;
+                margin: 2px;
+                cursor: pointer;
+                border-radius: 68px;
+            }
+            
+            .button2:hover {
+                background-color: darkblue;
+            }
+        </style>
+    </head>
+    
+    <body>
+        <h1>DannTech Web Server</h1>
+        <h3>Under Nima's Bed Light</h3>
+        <form action="/get">
+            <button id="myButton" name="underBedLight" class="button1" value="ON" onclick="sendRequest()">ON</button>
+        </form>
+        
+        <script>
+            function sendRequest() {
+                var button = document.getElementById('myButton');
+                var currentState = button.innerHTML.toUpperCase();
+                var nextState = currentState === 'ON' ? 'off' : 'on';
+
+                button.innerHTML = nextState.toUpperCase();
+                button.className = nextState === 'on' ? 'button1' : 'button2';
+                button.value = nextState === 'on' ? 'ON' : 'OFF';
+                
+                // Uncomment the lines below if you want to make a POST request
+                // var xhr = new XMLHttpRequest();
+                // xhr.open("POST", "/get", true);
+                // xhr.send();
+            }
+        </script>
+    </body>
+</html>
+        )rawliteral";
+
+const int underBedLights = 27;
 
 void notFound(AsyncWebServerRequest *request) {
     request->send(404, "text/plain", "Not found");
@@ -74,9 +154,37 @@ String exportRam(int address){
   return String(data);
 }
 
+void LedHandleRoot(int ledPin, AsyncWebServerRequest *request) {
+    String message;
+    if (request->hasParam("underBedLight")) {
+        String state = request->getParam("underBedLight")->value();
+        if (state == "ON") {
+            digitalWrite(ledPin, HIGH);  // Turn on the LED
+            message = "LED turned on";
+            // Serial.println(message);
+        } 
+        else if (state == "OFF") {
+            digitalWrite(ledPin, LOW);   // Turn off the LED
+            message = "LED turned off";
+            // Serial.println(message);
+        }
+        else {
+            // message = "Invalid state parameter";
+        }
+    } 
+    else {
+        // message = "No state parameter provided";
+    }
+
+    request->send(200, "text/html", message + "<a href=\"/\">Return to Home Page</a>");
+    // request->send(200, "text/html");
+            
+}
+
 void setup() {
     Serial.begin(115200);
     EEPROM.begin(EEPROM_SIZE);
+    pinMode(underBedLights, OUTPUT);
 
     if (EEPROM.read(0) != 0x0F){
         Serial.print("Setting up Access Point IP...");
@@ -88,7 +196,7 @@ void setup() {
         Serial.println(WiFi.softAPIP());
 
         AP_Server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-            request->send_P(200, "text/html", index_html);
+            request->send_P(200, "text/html", AP_html);
         });
         AP_Server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request){
         if (request->hasParam("wifiName") && request->hasParam("wifiPass")){
@@ -99,7 +207,7 @@ void setup() {
             request->send(200, "text/html", "HTTP GET request sent to your ESP on input field <br><a href=\"/\">Return to Home Page</a>");
             EEPROM.write(0, 0x0F);
             importRam(1, wifiName);
-            importRam(10, wifiPass);
+            importRam(20, wifiPass);
             EEPROM.commit();
         }
         });
@@ -109,8 +217,8 @@ void setup() {
 
     if (EEPROM.read(0) == 0x0F){
         wifiName = exportRam(1);
-        wifiPass = exportRam(10);
-        Serial.print("Setting up wifi-Mode...");
+        wifiPass = exportRam(20);
+        Serial.println("Setting up wifi-Mode...");
         WiFi.mode(WIFI_STA);
 
         // Configures static IP address
@@ -121,21 +229,41 @@ void setup() {
         Serial.print("Connecting to ");
         Serial.println(wifiName);
         WiFi.begin(wifiName, wifiPass);
-        while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-        }
-        // Print local IP address and start web server
-        Serial.println("");
-        Serial.println("WiFi connected.");
-        Serial.println("IP address: ");
-        Serial.println(WiFi.localIP());
 
-        STA_Server.onNotFound(notFound);
-        STA_Server.begin();
+        int i = 0;
+        while (WiFi.status() != WL_CONNECTED){
+            delay(500);
+            Serial.print(".");
+            if(i==10){
+                EEPROM.write(0, 0xF0);
+                EEPROM.commit();   
+                break;
+            }
+            i++;
+        }
+        if(EEPROM.read(0) == 0x0F){
+            // Print local IP address and start web server
+            Serial.println("");
+            Serial.print("WiFi connected to ");
+            Serial.println(wifiName);
+            Serial.println("IP address: ");
+            Serial.println(WiFi.localIP());
+
+            STA_Server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+                request->send_P(200, "text/html", STA_html);
+            });
+            
+            STA_Server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request) {
+                LedHandleRoot(underBedLights, request);
+            });
+
+            STA_Server.onNotFound(notFound);
+            STA_Server.begin();
+            Serial.println("Web server started");
+        }
     }
 }
 
 void loop(){
-    
+
 }
