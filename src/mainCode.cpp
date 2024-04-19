@@ -9,6 +9,7 @@
 #include <ESPAsyncWebServer.h>
 // #include <WebServer.h>
 #include "AP_Connection.h"
+#include <HTTPClient.h>
 #include <EEPROM.h>
 
 #define EEPROM_SIZE 50
@@ -51,87 +52,51 @@ const char AP_html[] PROGMEM = R"rawliteral(
         )rawliteral";
 
 const char STA_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            html {
-                font-family: Helvetica;
-                display: inline-block;
-                margin: 0px auto;
-                text-align: center;
-            }
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>
+                    html {font-family: Arial; display: inline-block; text-align: center;}
+                    h2 {font-size: 2.6rem;}
+                    body {max-width: 600px; margin:0px auto; padding-bottom: 10px;}
+                    .switch {position: relative; display: inline-block; width: 120px; height: 68px} 
+                    .switch input {display: none}
+                    .slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #a50d0d; border-radius: 34px}
+                    .slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #ffffff; -webkit-transition: .4s; transition: .4s; border-radius: 68px}
+                    input:checked+.slider {background-color: #0a960d}
+                    input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}
+                </style>
+            </head>
             
-            h1 {
-                margin-top: 50px;
-            }
-            
-            .button1 {
-                background-color: #0a960d;
-                border: none;
-                color: white;
-                padding: 16px 40px;
-                text-decoration: none;
-                font-size: 30px;
-                margin: 2px;
-                cursor: pointer;
-                border-radius: 68px;
-            }
-            
-            .button1:hover {
-                background-color: darkblue;
-            }
-            
-            .button2 {
-                background-color: #a50d0d;
-                border: none;
-                color: white;
-                padding: 16px 40px;
-                text-decoration: none;
-                font-size: 30px;
-                margin: 2px;
-                cursor: pointer;
-                border-radius: 68px;
-            }
-            
-            .button2:hover {
-                background-color: darkblue;
-            }
-        </style>
-    </head>
-    
-    <body>
-        <h1>DannTech Web Server</h1>
-        <h3>Under Nima's Bed Light</h3>
-        <form action="/get">
-            <button id="myButton" name="underBedLight" class="button1" value="ON" onclick="sendRequest()">ON</button>
-        </form>
-        
-        <script>
-            function sendRequest() {
-                var button = document.getElementById('myButton');
-                var currentState = button.innerHTML.toUpperCase();
-                var nextState = currentState === 'ON' ? 'off' : 'on';
+            <body>
+                <h1>DannTech Web Server</h1>
+                <h3>Under Nima's Bed Light</h3>
 
-                button.innerHTML = nextState.toUpperCase();
-                button.className = nextState === 'on' ? 'button1' : 'button2';
-                button.value = nextState === 'on' ? 'ON' : 'OFF';
-                
-                // Uncomment the lines below if you want to make a POST request
-                // var xhr = new XMLHttpRequest();
-                // xhr.open("POST", "/get", true);
-                // xhr.send();
-            }
-        </script>
-    </body>
-</html>
+                <p>Bed Light State <span id="state">%STATE%</span></p>
+                %BUTTONPLACEHOLDER%
+                <script>
+                    function toggleCheckbox(element) {
+                        var xhr = new XMLHttpRequest();
+                        if(element.checked){ 
+                            xhr.open("GET", "/update?state=1", true); 
+                            document.getElementById("state").innerHTML = "ON";  
+                        }
+                        else { 
+                            xhr.open("GET", "/update?state=0", true); 
+                            document.getElementById("state").innerHTML = "OFF";      
+                        }
+                        xhr.send();
+                    }
+                </script>
+            </body>
+        </html>
         )rawliteral";
 
-const int underBedLights = 27;
+const int underBedLights = 13;
 
 void notFound(AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not found");
+    request->send(404, "text/html", "Not found<a href=\"/\">Return to Home Page</a>");
 }
 
 void importRam(int address, String Mon){
@@ -154,37 +119,42 @@ String exportRam(int address){
   return String(data);
 }
 
-void LedHandleRoot(int ledPin, AsyncWebServerRequest *request) {
-    String message;
-    if (request->hasParam("underBedLight")) {
-        String state = request->getParam("underBedLight")->value();
-        if (state == "ON") {
-            digitalWrite(ledPin, HIGH);  // Turn on the LED
-            message = "LED turned on";
-            // Serial.println(message);
-        } 
-        else if (state == "OFF") {
-            digitalWrite(ledPin, LOW);   // Turn off the LED
-            message = "LED turned off";
-            // Serial.println(message);
+unsigned long lastTime = 0;
+unsigned long timerDelay = 2000;
+
+String outputState(){
+    if(digitalRead(underBedLights)){
+        return "checked";
+    }
+    else {
+        return "";
+    }
+    return "";
+}
+// Replaces placeholder with button section in your web page
+String processor(const String& var){
+    if(var == "BUTTONPLACEHOLDER"){
+        String buttons = "";
+        String outputStateValue = outputState();
+        buttons+= "<p><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"output\" " + outputStateValue + "><span class=\"slider\"></span></label></p>";
+        return buttons;
+    }
+    if (var == "STATE"){
+        if(digitalRead(underBedLights)){
+            return "ON";
         }
         else {
-            // message = "Invalid state parameter";
+            return "OFF";
         }
-    } 
-    else {
-        // message = "No state parameter provided";
     }
-
-    request->send(200, "text/html", message + "<a href=\"/\">Return to Home Page</a>");
-    // request->send(200, "text/html");
-            
+    return String();
 }
 
 void setup() {
     Serial.begin(115200);
     EEPROM.begin(EEPROM_SIZE);
     pinMode(underBedLights, OUTPUT);
+    digitalWrite(underBedLights, LOW);
 
     if (EEPROM.read(0) != 0x0F){
         Serial.print("Setting up Access Point IP...");
@@ -250,11 +220,26 @@ void setup() {
             Serial.println(WiFi.localIP());
 
             STA_Server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-                request->send_P(200, "text/html", STA_html);
+                request->send_P(200, "text/html", STA_html, processor);
             });
             
-            STA_Server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request) {
-                LedHandleRoot(underBedLights, request);
+            // STA_Server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request) {
+            //     LedHandleRoot(underBedLights, request);
+            // });
+            STA_Server.on("/update", HTTP_GET, [] (AsyncWebServerRequest *request) {
+                String inputMessage;
+                String inputParam;
+                if (request->hasParam("state")) {
+                    inputMessage = request->getParam("state")->value();
+                    inputParam = "state";
+                    digitalWrite(underBedLights, inputMessage.toInt());
+                }
+                else {
+                    inputMessage = "No message sent";
+                    inputParam = "none";
+                }
+                Serial.println(inputMessage.toInt());
+                request->send(200, "text/plain", "OK");
             });
 
             STA_Server.onNotFound(notFound);
@@ -265,5 +250,10 @@ void setup() {
 }
 
 void loop(){
+    //Send an HTTP POST request every 2 sec
+    // if ((millis() - lastTime) > timerDelay) {
+    //     digitalWrite(underBedLights, HIGH);
+    // }
 
+    // Serial.println(1);
 }

@@ -3,72 +3,36 @@
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            html {
-                font-family: Helvetica;
-                display: inline-block;
-                margin: 0px auto;
-                text-align: center;
-            }
-            
-            h1 {
-                margin-top: 50px;
-            }
-            
-            .button1 {
-                background-color: #0a960d;
-                border: none;
-                color: white;
-                padding: 16px 40px;
-                text-decoration: none;
-                font-size: 30px;
-                margin: 2px;
-                cursor: pointer;
-                border-radius: 68px;
-            }
-            
-            .button1:hover {
-                background-color: darkblue;
-            }
-            
-            .button2 {
-                background-color: #a50d0d;
-                border: none;
-                color: white;
-                padding: 16px 40px;
-                text-decoration: none;
-                font-size: 30px;
-                margin: 2px;
-                cursor: pointer;
-                border-radius: 68px;
-            }
-            
-            .button2:hover {
-                background-color: darkblue;
-            }
+            html {font-family: Arial; display: inline-block; text-align: center;}
+            h2 {font-size: 2.6rem;}
+            body {max-width: 600px; margin:0px auto; padding-bottom: 10px;}
+            .switch {position: relative; display: inline-block; width: 120px; height: 68px} 
+            .switch input {display: none}
+            .slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #a50d0d; border-radius: 34px}
+            .slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #ffffff; -webkit-transition: .4s; transition: .4s; border-radius: 68px}
+            input:checked+.slider {background-color: #0a960d}
+            input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}
         </style>
     </head>
     
     <body>
         <h1>DannTech Web Server</h1>
         <h3>Under Nima's Bed Light</h3>
-        <form action="/get">
-            <button id="myButton" name="underBedLight" class="button1" value="ON" onclick="sendRequest()">ON</button>
-        </form>
-        
-        <script>
-            function sendRequest() {
-                var button = document.getElementById('myButton');
-                var currentState = button.innerHTML.toUpperCase();
-                var nextState = currentState === 'ON' ? 'off' : 'on';
 
-                button.innerHTML = nextState.toUpperCase();
-                button.className = nextState === 'on' ? 'button1' : 'button2';
-                button.value = nextState === 'on' ? 'ON' : 'OFF';
-                
-                // Uncomment the lines below if you want to make a POST request
-                // var xhr = new XMLHttpRequest();
-                // xhr.open("POST", "/get", true);
-                // xhr.send();
+        <p>Bed Light State <span id="state">%STATE%</span></p>
+        %BUTTONPLACEHOLDER%
+        <script>
+            function toggleCheckbox(element) {
+                var xhr = new XMLHttpRequest();
+                if(element.checked){ 
+                    xhr.open("GET", "/update?state=1", true); 
+                    document.getElementById("state").innerHTML = "ON";  
+                }
+                else { 
+                    xhr.open("GET", "/update?state=0", true); 
+                    document.getElementById("state").innerHTML = "OFF";      
+                }
+                xhr.send();
             }
         </script>
     </body>
