@@ -9,6 +9,7 @@
 #include <ESPAsyncWebServer.h>
 // #include <WebServer.h>
 #include "AP_Connection.h"
+#include "espNimaLib.h"
 #include <HTTPClient.h>
 #include <EEPROM.h>
 
@@ -16,6 +17,16 @@
 
 AsyncWebServer AP_Server(80);
 AsyncWebServer STA_Server(80);
+espNimaLib DannTechLib;
+
+uint8_t rsLCD = 23;
+uint8_t enLCD = 32;
+uint8_t rwLCD = 22;
+uint8_t d4LCD = 33;
+uint8_t d5LCD = 25;
+uint8_t d6LCD = 26;
+uint8_t d7LCD = 27;
+LiquidCrystal lcd(rsLCD, rwLCD, enLCD, d4LCD, d5LCD, d6LCD, d7LCD);
 
 const char* boardSSID     = "DannTech";
 const char* boardPassword = "Nima7281";
@@ -131,7 +142,6 @@ String outputState(){
     }
     return "";
 }
-// Replaces placeholder with button section in your web page
 String processor(const String& var){
     if(var == "BUTTONPLACEHOLDER"){
         String buttons = "";
@@ -151,19 +161,22 @@ String processor(const String& var){
 }
 
 void setup() {
-    Serial.begin(115200);
+    // Serial.begin(115200);
+    DannTechLib.LCD_Begin(lcd);
     EEPROM.begin(EEPROM_SIZE);
     pinMode(underBedLights, OUTPUT);
-    digitalWrite(underBedLights, LOW);
 
     if (EEPROM.read(0) != 0x0F){
-        Serial.print("Setting up Access Point IP...");
+        // Serial.print("Setting up Access Point IP...");
+        DannTechLib.LCD_Write(lcd, "Setting up Access Point IP...", true, 0);
         WiFi.mode(WIFI_AP);
         WiFi.softAP(boardSSID, boardPassword);
 
-        Serial.println();
-        Serial.print("AP IP address: ");
-        Serial.println(WiFi.softAPIP());
+        // Serial.println();
+        // Serial.print("AP IP address: ");
+        DannTechLib.LCD_Write(lcd, "AP IP address: ", true, 0);
+        DannTechLib.LCD_Write(lcd, String(WiFi.softAPIP()), false, 1);
+        // Serial.println(WiFi.softAPIP());
 
         AP_Server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
             request->send_P(200, "text/html", AP_html);
@@ -171,9 +184,11 @@ void setup() {
         AP_Server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request){
         if (request->hasParam("wifiName") && request->hasParam("wifiPass")){
             wifiName = request->getParam("wifiName")->value();
-            Serial.println(wifiName);
+            // Serial.println(wifiName);
+            DannTechLib.LCD_Write(lcd, wifiName, true, 0);
             wifiPass = request->getParam("wifiPass")->value();
-            Serial.println(wifiPass);
+            // Serial.println(wifiPass);
+            DannTechLib.LCD_Write(lcd, wifiPass, false, 1);
             request->send(200, "text/html", "HTTP GET request sent to your ESP on input field <br><a href=\"/\">Return to Home Page</a>");
             EEPROM.write(0, 0x0F);
             importRam(1, wifiName);
@@ -188,22 +203,25 @@ void setup() {
     if (EEPROM.read(0) == 0x0F){
         wifiName = exportRam(1);
         wifiPass = exportRam(20);
-        Serial.println("Setting up wifi-Mode...");
+        // Serial.println("Setting up wifi-Mode...");
+        DannTechLib.LCD_Write(lcd, "Setting up wifi-Mode...", true, 0);
         WiFi.mode(WIFI_STA);
 
         // Configures static IP address
         if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-            Serial.println("STA Failed to configure");
+            // Serial.println("STA Failed to configure");
+            DannTechLib.LCD_Write(lcd, "STA Failed to configure", false, 1);
         }
-        // Connect to Wi-Fi network with SSID and password
-        Serial.print("Connecting to ");
-        Serial.println(wifiName);
+        // Serial.print("Connecting to ");
+        // Serial.println(wifiName);
+        DannTechLib.LCD_Write(lcd, "Connecting to " + wifiName, true, 0);
         WiFi.begin(wifiName, wifiPass);
 
         int i = 0;
         while (WiFi.status() != WL_CONNECTED){
             delay(500);
-            Serial.print(".");
+            // Serial.print(".");
+            DannTechLib.LCD_Write(lcd, ".", false, 1);
             if(i==10){
                 EEPROM.write(0, 0xF0);
                 EEPROM.commit();   
@@ -213,11 +231,13 @@ void setup() {
         }
         if(EEPROM.read(0) == 0x0F){
             // Print local IP address and start web server
-            Serial.println("");
-            Serial.print("WiFi connected to ");
-            Serial.println(wifiName);
-            Serial.println("IP address: ");
-            Serial.println(WiFi.localIP());
+            // Serial.println("");
+            DannTechLib.LCD_Write(lcd, "WiFi connected to " + wifiName, true, 0);
+            // Serial.print("WiFi connected to ");
+            // Serial.println(wifiName);
+            DannTechLib.LCD_Write(lcd, "IP address: " + String(WiFi.localIP()), false, 1);
+            // Serial.print("IP address: ");
+            // Serial.println(WiFi.localIP());
 
             STA_Server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
                 request->send_P(200, "text/html", STA_html, processor);
@@ -238,13 +258,15 @@ void setup() {
                     inputMessage = "No message sent";
                     inputParam = "none";
                 }
-                Serial.println(inputMessage.toInt());
+                // Serial.println(inputMessage.toInt());
+                DannTechLib.LCD_Write(lcd, String(inputMessage.toInt()), true, 0);
                 request->send(200, "text/plain", "OK");
             });
 
             STA_Server.onNotFound(notFound);
             STA_Server.begin();
-            Serial.println("Web server started");
+            DannTechLib.LCD_Write(lcd, "Web server started", true, 0);
+            // Serial.println("Web server started");
         }
     }
 }
